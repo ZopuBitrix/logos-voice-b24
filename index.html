@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Λ Logos - Voice Messages</title>
+    <style>
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        
+        .logos-voice-placement-container {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        
+        .logos-voice-btn-placement:hover {
+            transform: scale(1.05);
+        }
+        
+        .logos-voice-btn-placement:active {
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body>
+    <script src="//api.bitrix24.com/api/v1/dev/"></script>
+    <script>
+    BX24.init(async () => {
+        console.log('🎤 Λ Logos: Inicializando Application Placement...');
+        
+        // Configurações padrão
+        const DEFAULT_CONFIG = {
+            audioFormat: 'audio/webm',
+            sampleRate: 16000,
+            channels: 1,
+            noiseSuppression: true,
+            echoCancellation: true
+        };
+
+        // Credenciais do Bitrix24
+        const BITRIX24_CONFIG = {
+            clientId: 'local.68bf78751043a8.13323224',
+            clientSecret: 'kEB3N9i9qwy54ZP1LILHAnIpyanpVYJv86KBjye9GBbUWo9Hcj'
+        };
+
+        // Estado da aplicação
+        const state = {
+            isRecording: false,
+            mediaRecorder: null,
+            audioChunks: [],
+            mediaStream: null,
+            config: { ...DEFAULT_CONFIG }
+        };
+
+        // Cria o botão de voz
+        function createVoiceButton() {
+            console.log('🎤 Λ Logos: Criando botão de voz...');
+            
+            const buttonContainer = document.createElement('div');
+            buttonContainer.className = 'logos-voice-placement-container';
+            buttonContainer.style.cssText = `
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 8px;
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 8px;
+                backdrop-filter: blur(10px);
+            `;
+
+            const voiceButton = document.createElement('button');
+            voiceButton.className = 'logos-voice-btn-placement';
+            voiceButton.innerHTML = '🎤';
+            voiceButton.title = 'Gravar mensagem de voz';
+            voiceButton.style.cssText = `
+                width: 40px;
+                height: 40px;
+                border: none;
+                border-radius: 50%;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                font-size: 18px;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            `;
+
+            // Efeitos visuais
+            voiceButton.addEventListener('mouseenter', () => {
+                voiceButton.style.transform = 'scale(1.1)';
+                voiceButton.style.boxShadow = '0 6px 20px rgba(102, 126, 234, 0.6)';
+            });
+
+            voiceButton.addEventListener('mouseleave', () => {
+                voiceButton.style.transform = 'scale(1)';
+                voiceButton.style.boxShadow = '0 4px 15px rgba(102, 126, 234, 0.4)';
+            });
+
+            buttonContainer.appendChild(voiceButton);
+            
+            // Insere o conteúdo usando BX24.placement
+            try {
+                BX24.placement.insertContent(buttonContainer);
+                console.log('✅ Λ Logos: Botão inserido via BX24.placement');
+            } catch (error) {
+                console.error('❌ Λ Logos: Erro ao inserir botão:', error);
+                // Fallback: insere diretamente no DOM
+                document.body.appendChild(buttonContainer);
+            }
+            
+            // Configura eventos de gravação
+            setupRecordingEvents(voiceButton);
+        }
+
+        // Configura os eventos de gravação
+        function setupRecordingEvents(button) {
+            console.log('🎤 Λ Logos: Configurando eventos de gravação...');
+
+            // Evento de início da gravação (mousedown/touchstart)
+            button.addEventListener('mousedown', startRecording);
+            button.addEventListener('touchstart', startRecording);
+
+            // Evento de fim da gravação (mouseup/touchend)
+            button.addEventListener('mouseup', stopRecording);
+            button.addEventListener('touchend', stopRecording);
+            button.addEventListener('mouseleave', stopRecording);
+
+            // Previne o comportamento padrão
+            button.addEventListener('contextmenu', (e) => e.preventDefault());
+        }
+
+        // Inicia a gravação de áudio
+        async function startRecording(event) {
+            event.preventDefault();
+            
+            if (state.isRecording) return;
+            
+            console.log('🎤 Λ Logos: Iniciando gravação...');
+            
+            try {
+                // Solicita acesso ao microfone
+                state.mediaStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        sampleRate: state.config.sampleRate,
+                        channelCount: state.config.channels,
+                        noiseSuppression: state.config.noiseSuppression,
+                        echoCancellation: state.config.echoCancellation
+                    }
+                });
+
+                // Configura o MediaRecorder
+                const options = {
+                    mimeType: state.config.audioFormat,
+                    audioBitsPerSecond: 128000
+                };
+
+                state.mediaRecorder = new MediaRecorder(state.mediaStream, options);
+                state.audioChunks = [];
+
+                // Eventos do MediaRecorder
+                state.mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        state.audioChunks.push(event.data);
+                    }
+                };
+
+                state.mediaRecorder.onstop = () => {
+                    processAudio();
+                };
+
+                // Inicia a gravação
+                state.mediaRecorder.start(100); // Coleta dados a cada 100ms
+                state.isRecording = true;
+
+                // Atualiza a interface
+                updateButtonState(true);
+                
+                console.log('✅ Λ Logos: Gravação iniciada');
+
+            } catch (error) {
+                console.error('❌ Λ Logos: Erro ao iniciar gravação:', error);
+                showError('Erro ao acessar o microfone. Verifique as permissões.');
+            }
+        }
+
+        // Para a gravação de áudio
+        function stopRecording(event) {
+            event.preventDefault();
+            
+            if (!state.isRecording || !state.mediaRecorder) return;
+            
+            console.log('🎤 Λ Logos: Parando gravação...');
+            
+            state.mediaRecorder.stop();
+            state.isRecording = false;
+            
+            // Para o stream de mídia
+            if (state.mediaStream) {
+                state.mediaStream.getTracks().forEach(track => track.stop());
+                state.mediaStream = null;
+            }
+            
+            // Atualiza a interface
+            updateButtonState(false);
+        }
+
+        // Processa o áudio gravado
+        async function processAudio() {
+            console.log('🎤 Λ Logos: Processando áudio...');
+            
+            if (state.audioChunks.length === 0) {
+                console.log('⚠️ Λ Logos: Nenhum áudio gravado');
+                return;
+            }
+
+            try {
+                // Cria o blob de áudio
+                const audioBlob = new Blob(state.audioChunks, { 
+                    type: state.config.audioFormat 
+                });
+                
+                console.log(`🎤 Λ Logos: Áudio criado - Tamanho: ${audioBlob.size} bytes`);
+                
+                // Converte para base64
+                const base64Audio = await blobToBase64(audioBlob);
+                
+                // Envia o áudio
+                await sendAudioToBitrix24(base64Audio, audioBlob);
+                
+            } catch (error) {
+                console.error('❌ Λ Logos: Erro ao processar áudio:', error);
+                showError('Erro ao processar o áudio gravado.');
+            }
+        }
+
+        // Converte blob para base64
+        function blobToBase64(blob) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const base64 = reader.result.split(',')[1];
+                    resolve(base64);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+        }
+
+        // Envia o áudio para o Bitrix24
+        async function sendAudioToBitrix24(base64Audio, audioBlob) {
+            console.log('🎤 Λ Logos: Enviando áudio para Bitrix24...');
+            
+            try {
+                // Obtém o ID do diálogo do contexto atual
+                const dialogId = BX24.placement.options.DIALOG_ID;
+                
+                if (!dialogId) {
+                    throw new Error('ID do diálogo não encontrado no contexto');
+                }
+                
+                console.log(`🎤 Λ Logos: Enviando para diálogo: ${dialogId}`);
+                
+                // Envia mensagem indicando que o áudio foi enviado
+                await BX24.callMethod('im.message.add', {
+                    'DIALOG_ID': dialogId,
+                    'MESSAGE': '🎤 Mensagem de voz enviada via Λ Logos'
+                });
+                
+                console.log('✅ Λ Logos: Áudio enviado com sucesso!');
+                
+                // TODO: Implementar upload real do arquivo de áudio
+                // await uploadAudioFile(dialogId, base64Audio, audioBlob);
+                
+            } catch (error) {
+                console.error('❌ Λ Logos: Erro ao enviar áudio:', error);
+                showError('Erro ao enviar áudio. Tente novamente.');
+            }
+        }
+
+        // Atualiza o estado visual do botão
+        function updateButtonState(isRecording) {
+            const button = document.querySelector('.logos-voice-btn-placement');
+            if (!button) return;
+            
+            if (isRecording) {
+                button.innerHTML = '⏹️';
+                button.style.background = 'linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%)';
+                button.style.animation = 'pulse 1s infinite';
+            } else {
+                button.innerHTML = '🎤';
+                button.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+                button.style.animation = 'none';
+            }
+        }
+
+        // Exibe mensagem de erro
+        function showError(message) {
+            console.error('❌ Λ Logos:', message);
+            
+            // Cria notificação temporária
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #ff6b6b;
+                color: white;
+                padding: 12px 20px;
+                border-radius: 8px;
+                z-index: 10000;
+                font-family: Arial, sans-serif;
+                font-size: 14px;
+                box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+            `;
+            notification.textContent = `Λ Logos: ${message}`;
+            
+            document.body.appendChild(notification);
+            
+            // Remove após 5 segundos
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 5000);
+        }
+
+        // Cria o botão
+        createVoiceButton();
+        console.log('✅ Λ Logos: Application Placement inicializado com sucesso!');
+    });
+    </script>
+</body>
+</html>
