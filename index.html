@@ -30,6 +30,29 @@
     BX24.init(async () => {
         console.log('🎤 Λ Logos: Inicializando Application Placement...');
         
+        // Teste visual
+        const testDiv = document.createElement('div');
+        testDiv.innerHTML = '🎤 Λ Logos: Application Placement ATIVO!';
+        testDiv.style.cssText = `
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: #4CAF50;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 9999;
+            font-family: Arial, sans-serif;
+        `;
+        document.body.appendChild(testDiv);
+        
+        // Remove após 5 segundos
+        setTimeout(() => {
+            if (testDiv.parentNode) {
+                testDiv.parentNode.removeChild(testDiv);
+            }
+        }, 5000);
+        
         // Configurações padrão
         const DEFAULT_CONFIG = {
             audioFormat: 'audio/webm',
